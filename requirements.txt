@@ -1,0 +1,23 @@
+# Production requirements for FastMCP Sasai Wallet Operations Server
+
+# Core FastMCP framework
+fastmcp>=2.0.0
+
+# HTTP client for API calls  
+httpx>=0.25.0
+
+# Type hints support
+typing-extensions>=4.5.0
+
+# Configuration and environment management
+python-dotenv>=1.0.0
+
+# Data validation
+pydantic>=2.0.0
+
+# Async support
+anyio>=4.0.0
+
+# MongoDB async driver for database tools
+motor>=3.3.0
+pymongo>=4.5.0
