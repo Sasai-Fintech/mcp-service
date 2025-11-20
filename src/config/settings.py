@@ -89,10 +89,12 @@ class SasaiConfig:
     ENABLE_AUTO_TOKEN_REFRESH = os.getenv("ENABLE_AUTO_TOKEN_REFRESH", "true").lower() == "true"
     ENABLE_REQUEST_LOGGING = os.getenv("ENABLE_REQUEST_LOGGING", "false").lower() == "true"
     
-    # RAG Service Configuration
-    RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL", "http://localhost:8000/teams/agent")
+    # RAG Service Configuration (Direct Retrieval API)
+    RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL", "http://localhost:8000/api/retriever")
     RAG_TENANT_ID = os.getenv("RAG_TENANT_ID", "sasai")
+    RAG_TENANT_SUB_ID = os.getenv("RAG_TENANT_SUB_ID", "sasai-sub")
     RAG_KNOWLEDGE_BASE_ID = os.getenv("RAG_KNOWLEDGE_BASE_ID", "sasai-compliance-kb")
+    RAG_PROVIDER_CONFIG_ID = os.getenv("RAG_PROVIDER_CONFIG_ID", "azure-openai-llm-gpt-4o-mini")
     RAG_REQUEST_TIMEOUT = float(os.getenv("RAG_REQUEST_TIMEOUT", "30.0"))
     
     @classmethod

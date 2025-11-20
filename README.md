@@ -130,9 +130,11 @@ SASAI_PIN=your_encrypted_pin
 SASAI_USER_REFERENCE_ID=your_user_reference_id
 
 # RAG Service Configuration (optional)
-RAG_SERVICE_URL=http://localhost:8000/teams/agent
+RAG_SERVICE_URL=http://localhost:8000/api/retriever
 RAG_TENANT_ID=sasai
+RAG_TENANT_SUB_ID=sasai-sub
 RAG_KNOWLEDGE_BASE_ID=sasai-compliance-kb
+RAG_PROVIDER_CONFIG_ID=azure-openai-llm-gpt-4o-mini
 RAG_REQUEST_TIMEOUT=30.0
 
 # Server Configuration (optional)
@@ -186,9 +188,11 @@ python scripts/run_server.py --validate-only
 - **`wallet_get_regulatory_guidance`** - Get regulatory guidance for wallet operations across different jurisdictions
 
 ### RAG (Compliance Knowledge) Tools
-- **`wallet_query_compliance_knowledge`** - Query Sasai compliance knowledge base for policy and regulatory information
-- **`wallet_search_compliance_policies`** - Search wallet-specific compliance policies and procedures
-- **`wallet_get_regulatory_guidance`** - Get regulatory guidance for wallet operations and financial services
+- **`wallet_query_compliance_knowledge`** - Retrieve relevant compliance document chunks for Claude to synthesize answers
+- **`wallet_search_compliance_policies`** - Search and retrieve wallet-specific compliance policy documents
+- **`wallet_get_regulatory_guidance`** - Retrieve regulatory guidance document chunks for wallet operations
+
+**Note**: RAG tools now return raw document chunks from the retrieval API, allowing Claude to be the single point of intelligence for synthesizing comprehensive responses. This eliminates double LLM processing and reduces latency.
 
 ## 📖 Usage Examples
 
