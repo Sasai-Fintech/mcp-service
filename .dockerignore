@@ -1,0 +1,25 @@
+# Ignore development and test files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.log
+.git/
+.gitignore
+README.md
+test_*.py
+debug_*.py
+simple_*.py
+venv/
+.venv/
+.env.local
+.env.development
+node_modules/
+.DS_Store
+*.egg-info/
+
+# Keep only production files
+!src/
+!streamable_http_server.py
+!requirements.txt
