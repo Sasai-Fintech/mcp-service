@@ -62,7 +62,7 @@ def register_transaction_tools(mcp_server) -> None:
         
         # Prepare JSON payload (as required by the API)
         json_payload = {
-            "pin": SasaiConfig.AUTH_CREDENTIALS.pin,  # PIN is required for transaction history
+            "pin": SasaiConfig.get_auth_credentials().pin,  # PIN is required for transaction history
             "currency": currency,
             "page": page,
             "pageSize": pageSize

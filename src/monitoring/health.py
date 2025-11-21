@@ -74,7 +74,7 @@ def register_monitoring_tools(mcp_server) -> None:
                     elif endpoint_name == "transaction_history":
                         # Transaction history requires POST with JSON payload including PIN
                         test_json_data = {
-                            "pin": SasaiConfig.AUTH_CREDENTIALS.pin,
+                            "pin": SasaiConfig.get_auth_credentials().pin,
                             "currency": "USD",
                             "page": 0,
                             "pageSize": 1

@@ -30,8 +30,8 @@ async def generate_authentication_token() -> Dict[str, Any]:
     try:
         # Step 1: Initial login to get access token
         login_payload = {
-            "username": SasaiConfig.AUTH_CREDENTIALS.username,
-            "password": SasaiConfig.AUTH_CREDENTIALS.password,
+            "username": SasaiConfig.get_auth_credentials().username,
+            "password": SasaiConfig.get_auth_credentials().password,
             "tenantId": SasaiConfig.TENANT_ID,
             "clientId": SasaiConfig.CLIENT_ID
         }
@@ -64,8 +64,8 @@ async def generate_authentication_token() -> Dict[str, Any]:
             # Step 2: Verify PIN with guest token
             pin_verify_url = f"{SasaiConfig.ENDPOINTS.pin_verify}?tenantId={SasaiConfig.TENANT_ID}&azp={SasaiConfig.CLIENT_ID}"
             pin_payload = {
-                "pin": SasaiConfig.AUTH_CREDENTIALS.pin,
-                "userReferenceId": SasaiConfig.AUTH_CREDENTIALS.user_reference_id
+                "pin": SasaiConfig.get_auth_credentials().pin,
+                "userReferenceId": SasaiConfig.get_auth_credentials().user_reference_id
             }
             
             pin_headers = SasaiConfig.DEFAULT_HEADERS.copy()

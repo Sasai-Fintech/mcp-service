@@ -1,6 +1,7 @@
 """Configuration module for Sasai Payment Gateway API."""
 
 import os
+import sys
 from typing import Dict, Any
 from dataclasses import dataclass
 
@@ -25,6 +26,11 @@ class AuthCredentials:
     password: str
     pin: str
     user_reference_id: str
+
+
+class ConfigurationError(Exception):
+    """Raised when required configuration is missing or invalid."""
+    pass
 
 
 class SasaiConfig:
@@ -65,13 +71,48 @@ class SasaiConfig:
         "Accept": "application/json"
     }
     
-    # Authentication credentials (from environment variables for security)
-    AUTH_CREDENTIALS = AuthCredentials(
-        username=os.getenv("SASAI_USERNAME", "64543532-3dee-43bc-b42e-d6b503f7fbdb"),
-        password=os.getenv("SASAI_PASSWORD", "iW8I*0bZ"),
-        pin=os.getenv("SASAI_PIN", "OcXNch0pf3OKT+SD9xpM3qVoL6sDV2boAVWQjPj4H1+9VJhg4GyBsqC8Hu/x06YA50wxknXQqlIF5BFnd98zALxZOCX1i+xoPHuXdNn2Xqai/rBBeQf4N5Bq3r0JoOoyWUO954T4/3Ax2K57flYn0vntFglo8gJGfSSvPk8PJaCaVHDWir3VFfGJ2/vR59gqt7C+QeMkEMIhba89KGdHmSybdzZ7DjW7T4IjIkVIcpOTD/KhWGLovRuO7ptMI8u5gXp9ut/ZK+4PnD17N0XNxYXZXVk4SHbp784Sl3lKbpAwE5YZEP79rmAt723xJuz/KEPatOocyFN7sV2j/C+WVg=="),
-        user_reference_id=os.getenv("SASAI_USER_REFERENCE_ID", "8da526ff-3813-466d-9aed-6fc9cdc72931")
-    )
+    # Authentication credentials - REQUIRE environment variables for security
+    @classmethod
+    def _get_required_env(cls, var_name: str, description: str = None) -> str:
+        """Get required environment variable or raise ConfigurationError."""
+        value = os.getenv(var_name)
+        if not value or value in ["CHANGE_ME", "your_value_here", ""]:
+            error_msg = f"Required environment variable '{var_name}' is not set or contains placeholder value."
+            if description:
+                error_msg += f" {description}"
+            raise ConfigurationError(error_msg)
+        return value
+    
+    @classmethod
+    def _get_auth_credentials(cls) -> AuthCredentials:
+        """Get authentication credentials from environment variables."""
+        try:
+            return AuthCredentials(
+                username=cls._get_required_env("SASAI_USERNAME", "Set your Sasai wallet username."),
+                password=cls._get_required_env("SASAI_PASSWORD", "Set your Sasai wallet password."),
+                pin=cls._get_required_env("SASAI_PIN", "Set your Sasai wallet PIN token."),
+                user_reference_id=cls._get_required_env("SASAI_USER_REFERENCE_ID", "Set your Sasai user reference ID.")
+            )
+        except ConfigurationError as e:
+            print(f"\n🚨 CONFIGURATION ERROR: {e}")
+            print("\n📋 Required environment variables:")
+            print("   - SASAI_USERNAME: Your Sasai wallet username")
+            print("   - SASAI_PASSWORD: Your Sasai wallet password") 
+            print("   - SASAI_PIN: Your Sasai wallet PIN token")
+            print("   - SASAI_USER_REFERENCE_ID: Your Sasai user reference ID")
+            print("\n💡 Set these in your environment or .env file before running the server.")
+            print("   Example: export SASAI_USERNAME=your_username")
+            sys.exit(1)
+    
+    # Initialize credentials with validation
+    _AUTH_CREDENTIALS = None  # Will be set on first access
+    
+    @classmethod
+    def get_auth_credentials(cls) -> AuthCredentials:
+        """Get authentication credentials (lazy-loaded with validation)."""
+        if cls._AUTH_CREDENTIALS is None:
+            cls._AUTH_CREDENTIALS = cls._get_auth_credentials()
+        return cls._AUTH_CREDENTIALS
     
     # HTTP client settings
     REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "30.0"))
@@ -130,18 +171,26 @@ class SasaiConfig:
             "SASAI_USERNAME", "SASAI_PASSWORD", "SASAI_PIN", "SASAI_USER_REFERENCE_ID"
         ]
         
-        missing_vars = [var for var in required_vars if not os.getenv(var)]
+        missing_vars = []
+        placeholder_vars = []
+        
+        for var in required_vars:
+            value = os.getenv(var)
+            if not value:
+                missing_vars.append(var)
+            elif value in ["CHANGE_ME", "your_value_here", ""]:
+                placeholder_vars.append(var)
+        
         if missing_vars:
             issues.append(f"Missing environment variables: {', '.join(missing_vars)}")
+        if placeholder_vars:
+            issues.append(f"Environment variables with placeholder values: {', '.join(placeholder_vars)}")
         
         # Validate URLs
-        try:
-            import urllib.parse
-            parsed_url = urllib.parse.urlparse(cls.BASE_URL)
-            if not all([parsed_url.scheme, parsed_url.netloc]):
-                issues.append(f"Invalid base URL: {cls.BASE_URL}")
-        except Exception as e:
-            issues.append(f"URL validation error: {str(e)}")
+        import urllib.parse
+        parsed_url = urllib.parse.urlparse(cls.BASE_URL)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            issues.append(f"Invalid base URL: {cls.BASE_URL}")
         
         # Validate timeout settings
         if cls.REQUEST_TIMEOUT <= 0:

@@ -121,12 +121,17 @@ class SasaiAPIClient:
         Raises:
             Various SasaiAPIError subclasses based on response status
         """
-        # Success response
-        if response.status_code == 200:
-            try:
-                response_data = response.json()
-            except Exception:
-                response_data = {"message": response.text}
+        # Success response - handle all 2xx status codes
+        if 200 <= response.status_code < 300:
+            # Handle empty body responses (e.g., 204 No Content)
+            if not response.text.strip():
+                response_data = None
+            else:
+                try:
+                    response_data = response.json()
+                except (ValueError, Exception):
+                    # Fallback for non-JSON responses
+                    response_data = {"message": response.text}
             
             return {
                 "success": True,
