@@ -15,32 +15,18 @@ from core.exceptions import SasaiAPIError
 class RAGConfig:
     """Configuration for RAG service integration"""
     
-    # RAG API endpoint - Direct retrieval API (no double LLM calls)
-    RAG_API_BASE_URL = "http://localhost:8000/api/retriever"
-    
-    # Default tenant configuration for Sasai (matching your existing setup)
-    DEFAULT_TENANT_ID = "sasai"
-    DEFAULT_TENANT_SUB_ID = "sasai-sub"
-    DEFAULT_KNOWLEDGE_BASE_ID = "sasai-compliance-kb"
-    
-    # Default provider config ID for embeddings (from your curl example)
-    DEFAULT_PROVIDER_CONFIG_ID = "azure-openai-llm-gpt-4o-mini"
-    
-    # Default retrieval parameters
+    # Default retrieval parameters (not duplicated from SasaiConfig)
     DEFAULT_LIMIT = 5
     DEFAULT_MIN_SCORE = 0.1
     DEFAULT_RERANK = False
-    
-    # Request timeout settings
-    REQUEST_TIMEOUT = 30.0
 
 
 async def call_rag_retrieval_service(
     query: str,
-    knowledge_base_id: str = RAGConfig.DEFAULT_KNOWLEDGE_BASE_ID,
-    tenant_id: str = RAGConfig.DEFAULT_TENANT_ID,
-    tenant_sub_id: str = RAGConfig.DEFAULT_TENANT_SUB_ID,
-    provider_config_id: str = RAGConfig.DEFAULT_PROVIDER_CONFIG_ID,
+    knowledge_base_id: str = None,
+    tenant_id: str = None,
+    tenant_sub_id: str = None,
+    provider_config_id: str = None,
     limit: int = RAGConfig.DEFAULT_LIMIT,
     min_score: float = RAGConfig.DEFAULT_MIN_SCORE
 ) -> Dict[str, Any]:
@@ -52,10 +38,10 @@ async def call_rag_retrieval_service(
     
     Args:
         query: The search query
-        knowledge_base_id: Knowledge base to search
-        tenant_id: Tenant context
-        tenant_sub_id: Tenant sub-context
-        provider_config_id: Provider config for embeddings
+        knowledge_base_id: Knowledge base to search (defaults to SasaiConfig.RAG_KNOWLEDGE_BASE_ID)
+        tenant_id: Tenant context (defaults to SasaiConfig.RAG_TENANT_ID)
+        tenant_sub_id: Tenant sub-context (defaults to SasaiConfig.RAG_TENANT_SUB_ID)
+        provider_config_id: Provider config for embeddings (defaults to SasaiConfig.RAG_PROVIDER_CONFIG_ID)
         limit: Maximum number of results
         min_score: Minimum similarity score
     
@@ -66,8 +52,14 @@ async def call_rag_retrieval_service(
         SasaiAPIError: If retrieval service call fails
     """
     try:
-        # Build the retrieval API URL
-        retrieval_url = f"{RAGConfig.RAG_API_BASE_URL}/{knowledge_base_id}"
+        # Use SasaiConfig defaults if not provided
+        knowledge_base_id = knowledge_base_id or SasaiConfig.RAG_KNOWLEDGE_BASE_ID
+        tenant_id = tenant_id or SasaiConfig.RAG_TENANT_ID
+        tenant_sub_id = tenant_sub_id or SasaiConfig.RAG_TENANT_SUB_ID
+        provider_config_id = provider_config_id or SasaiConfig.RAG_PROVIDER_CONFIG_ID
+        
+        # Build the retrieval API URL using SasaiConfig
+        retrieval_url = f"{SasaiConfig.RAG_SERVICE_URL}/{knowledge_base_id}"
         
         # Prepare request headers (matching the curl example)
         headers = {
@@ -84,8 +76,8 @@ async def call_rag_retrieval_service(
             "min_score": min_score
         }
         
-        # Make HTTP GET request to retrieval service (matching the curl format)
-        async with httpx.AsyncClient(timeout=RAGConfig.REQUEST_TIMEOUT) as client:
+        # Make HTTP GET request using SasaiConfig.RAG_REQUEST_TIMEOUT
+        async with httpx.AsyncClient(timeout=SasaiConfig.RAG_REQUEST_TIMEOUT) as client:
             response = await client.get(
                 retrieval_url,
                 headers=headers,
@@ -95,51 +87,41 @@ async def call_rag_retrieval_service(
             if response.status_code != 200:
                 error_text = response.text if hasattr(response, 'text') else str(response.content)
                 raise SasaiAPIError(
-                    f"RAG Retrieval API error ({response.status_code}): {error_text}"
+                    f"RAG retrieval service call failed with status {response.status_code}: {error_text}",
+                    status_code=response.status_code,
+                    endpoint=retrieval_url
                 )
             
-            data = response.json()
+            # Return the raw response from retrieval service
+            response_data = response.json()
             
-            # Process the retrieval results
-            if "results" in data and isinstance(data["results"], list):
-                # Format the retrieved chunks for Claude to process
-                formatted_chunks = []
-                for result in data["results"]:
-                    chunk_info = {
-                        "text": result.get("text", ""),
-                        "score": result.get("score", 0.0),
-                        "metadata": result.get("metadata", {}),
-                        "chunk_id": result.get("chunk_id", "")
-                    }
-                    formatted_chunks.append(chunk_info)
-                
-                return {
-                    "success": True,
-                    "source": "rag_retrieval",
-                    "knowledge_base": knowledge_base_id,
-                    "query": query,
-                    "retrieved_chunks": formatted_chunks,
-                    "total_chunks": len(formatted_chunks),
-                    "retrieval_parameters": {
-                        "limit": limit,
-                        "min_score": min_score,
-                        "provider_config_id": provider_config_id
-                    }
-                }
-            else:
-                raise SasaiAPIError("RAG retrieval service returned unexpected response format")
-                
-    except httpx.TimeoutException:
-        raise SasaiAPIError("RAG retrieval service request timed out. Please try again.")
-    except httpx.RequestError as e:
-        raise SasaiAPIError(f"Failed to connect to RAG retrieval service: {str(e)}")
+            # Add metadata about the query for context
+            response_data["query_metadata"] = {
+                "original_query": query,
+                "knowledge_base_id": knowledge_base_id,
+                "tenant_id": tenant_id,
+                "tenant_sub_id": tenant_sub_id,
+                "provider_config_id": provider_config_id,
+                "limit": limit,
+                "min_score": min_score,
+                "retrieval_url": retrieval_url
+            }
+            
+            return response_data
+            
+    except httpx.HTTPError as e:
+        raise SasaiAPIError(f"HTTP error during RAG retrieval: {str(e)}")
+    except json.JSONDecodeError as e:
+        raise SasaiAPIError(f"Invalid JSON response from RAG service: {str(e)}")
     except Exception as e:
-        raise SasaiAPIError(f"Unexpected error calling RAG retrieval service: {str(e)}")
+        if isinstance(e, SasaiAPIError):
+            raise
+        raise SasaiAPIError(f"Unexpected error during RAG retrieval: {str(e)}")
 
 
 def register_rag_tools(mcp_server) -> None:
     """
-    Register RAG (compliance knowledge) tools with the MCP server.
+    Register RAG (Retrieval Augmented Generation) tools with the MCP server.
     
     Args:
         mcp_server: FastMCP server instance
@@ -172,35 +154,33 @@ def register_rag_tools(mcp_server) -> None:
         Raises:
             SasaiAPIError: If the knowledge base query fails or returns an error
         """
+        # Enhance the query with knowledge area context
+        enhanced_query = f"{knowledge_area} compliance: {question}" if knowledge_area != "general" else question
+        
         try:
-            # Enhance question with knowledge area context
-            enhanced_query = question
-            if knowledge_area and knowledge_area != "general":
-                enhanced_query = f"{knowledge_area} {question}"
-            
-            # Call retrieval service directly (no LLM processing)
+            # Call the RAG retrieval service using SasaiConfig defaults
             result = await call_rag_retrieval_service(
                 query=enhanced_query,
-                knowledge_base_id=RAGConfig.DEFAULT_KNOWLEDGE_BASE_ID,
-                tenant_id=RAGConfig.DEFAULT_TENANT_ID,
-                tenant_sub_id=RAGConfig.DEFAULT_TENANT_SUB_ID
+                limit=10,  # Get more results for comprehensive compliance guidance
+                min_score=0.1
             )
             
-            # Enhance response with metadata
-            result["request_info"] = {
-                "original_question": question,
-                "knowledge_area": knowledge_area,
-                "user_context": user_context,
-                "tool": "wallet_query_compliance_knowledge",
-                "note": "Raw document chunks retrieved for Claude to synthesize"
-            }
+            # Extract and format the response for the wallet context
+            chunks = result.get("chunks", [])
             
-            return result
+            return {
+                "retrieved_chunks": chunks,
+                "total_chunks": len(chunks),
+                "query": enhanced_query,
+                "knowledge_base": result.get("query_metadata", {}).get("knowledge_base_id", "unknown"),
+                "knowledge_area": knowledge_area,
+                "user_context": user_context
+            }
             
         except Exception as e:
             if isinstance(e, SasaiAPIError):
                 raise
-            raise SasaiAPIError(f"Failed to query compliance knowledge: {str(e)}")
+            raise SasaiAPIError(f"Compliance knowledge query failed: {str(e)}")
     
     @mcp_server.tool
     async def wallet_search_compliance_policies(
@@ -227,38 +207,38 @@ def register_rag_tools(mcp_server) -> None:
         Raises:
             SasaiAPIError: If the policy search fails or returns no results
         """
+        # Build policy-focused search query
+        search_terms = ["wallet", "policy", topic]
+        if policy_type:
+            search_terms.append(policy_type)
+        
+        policy_query = f"wallet policy {topic}" + (f" {policy_type}" if policy_type else "")
+        
         try:
-            # Create wallet-specific query
-            wallet_query = f"wallet {topic}"
-            if policy_type:
-                wallet_query = f"wallet {policy_type} {topic}"
-            
-            # Add compliance context
-            enhanced_query = f"{wallet_query} policy procedures requirements"
-            
-            # Call retrieval service directly
+            # Search for policy documents using SasaiConfig defaults
             result = await call_rag_retrieval_service(
-                query=enhanced_query,
-                knowledge_base_id=RAGConfig.DEFAULT_KNOWLEDGE_BASE_ID,
-                tenant_id=RAGConfig.DEFAULT_TENANT_ID,
-                tenant_sub_id=RAGConfig.DEFAULT_TENANT_SUB_ID
+                query=policy_query,
+                limit=8,  # Focus on most relevant policy documents
+                min_score=0.15  # Higher threshold for policy precision
             )
             
-            # Add wallet-specific metadata
-            result["request_info"] = {
-                "topic": topic,
-                "policy_type": policy_type,
-                "search_scope": "wallet_compliance",
-                "tool": "wallet_search_compliance_policies",
-                "note": "Raw policy document chunks retrieved for Claude to analyze"
-            }
+            chunks = result.get("chunks", [])
             
-            return result
+            return {
+                "retrieved_chunks": chunks,
+                "total_chunks": len(chunks),
+                "query": policy_query,
+                "compliance_context": {
+                    "topic": topic,
+                    "policy_type": policy_type,
+                    "search_focus": "wallet_compliance_policies"
+                }
+            }
             
         except Exception as e:
             if isinstance(e, SasaiAPIError):
                 raise
-            raise SasaiAPIError(f"Failed to search wallet compliance policies: {str(e)}")
+            raise SasaiAPIError(f"Compliance policy search failed: {str(e)}")
     
     @mcp_server.tool
     async def wallet_get_regulatory_guidance(
@@ -287,35 +267,35 @@ def register_rag_tools(mcp_server) -> None:
         Raises:
             SasaiAPIError: If regulatory guidance retrieval fails
         """
+        # Build regulation-focused query
+        regulation_terms = [regulation, jurisdiction, "regulation"]
+        if wallet_specific:
+            regulation_terms.extend(["wallet", "payment", "financial services"])
+        
+        reg_query = f"{regulation} regulation {jurisdiction}" + (" wallet payment" if wallet_specific else "")
+        
         try:
-            # Build regulatory query
-            reg_query = f"{regulation} regulation {jurisdiction}"
-            if wallet_specific:
-                reg_query = f"wallet payment {reg_query} compliance requirements"
-            
-            # Add regulatory context
-            enhanced_query = f"{reg_query} guidance requirements documentation"
-            
-            # Call retrieval service directly
+            # Search regulatory guidance using SasaiConfig defaults
             result = await call_rag_retrieval_service(
-                query=enhanced_query,
-                knowledge_base_id=RAGConfig.DEFAULT_KNOWLEDGE_BASE_ID,
-                tenant_id=RAGConfig.DEFAULT_TENANT_ID,
-                tenant_sub_id=RAGConfig.DEFAULT_TENANT_SUB_ID
+                query=reg_query,
+                limit=6,  # Focus on most relevant regulatory guidance
+                min_score=0.2  # Higher threshold for regulatory precision
             )
             
-            # Add regulatory metadata
-            result["request_info"] = {
-                "regulation": regulation,
-                "jurisdiction": jurisdiction,
-                "wallet_specific": wallet_specific,
-                "tool": "wallet_get_regulatory_guidance",
-                "note": "Raw regulatory document chunks retrieved for Claude to synthesize"
-            }
+            chunks = result.get("chunks", [])
             
-            return result
+            return {
+                "retrieved_chunks": chunks,
+                "total_chunks": len(chunks),
+                "regulatory_context": {
+                    "regulation": regulation,
+                    "jurisdiction": jurisdiction,
+                    "wallet_specific": wallet_specific
+                },
+                "query": reg_query
+            }
             
         except Exception as e:
             if isinstance(e, SasaiAPIError):
                 raise
-            raise SasaiAPIError(f"Failed to get regulatory guidance: {str(e)}")
+            raise SasaiAPIError(f"Regulatory guidance retrieval failed: {str(e)}")
