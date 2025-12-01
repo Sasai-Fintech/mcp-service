@@ -35,6 +35,8 @@ def register_all_tools(mcp_server: FastMCP) -> None:
     from monitoring.health import register_monitoring_tools
     from rag.tools import register_rag_tools
     from database.tools import register_database_tools
+    from wallet.insights import register_insights_tools
+    from wallet.support import register_support_tools
     
     # Register tools from each module
     register_auth_tools(mcp_server)
@@ -46,6 +48,8 @@ def register_all_tools(mcp_server: FastMCP) -> None:
     register_monitoring_tools(mcp_server)
     register_rag_tools(mcp_server)
     register_database_tools(mcp_server)
+    register_insights_tools(mcp_server)
+    register_support_tools(mcp_server)
 
 
 def initialize_server() -> FastMCP:

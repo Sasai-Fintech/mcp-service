@@ -56,7 +56,9 @@ async def main():
         logger.info(f"Starting MCP server with Streamable HTTP transport on {host}:{port}")
         
         # Use the production-ready streamable HTTP transport
-        await server.run_streamable_http_async(
+        # Switching to SSE transport for compatibility with standard MCP client
+        await server.run_http_async(
+            transport="sse",
             host=host,
             port=port,
             path=path,
